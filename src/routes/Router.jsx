@@ -23,15 +23,17 @@ import Analytics from "../page/analytics/Analytics";
 import Collaboration from "../page/collaboration/Collaboration";
 import Transaction from "../page/transaction/Transaction";
 import Report from "../page/report/Report";
+import Signup from "../Auth/Signup";
 
+import ProtectedRoute from "../protectedRoute/ProtectedRoute";
 
 export const router = createBrowserRouter([
   {
     path: "/",
     element: (
-     
+      <ProtectedRoute>
         <DashboardLayout></DashboardLayout>
-      
+      </ProtectedRoute>
     ),
     children: [
       {
@@ -112,6 +114,10 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <Login></Login>,
+  },
+  {
+    path: "/signup",
+    element: <Signup></Signup>,
   },
   {
     path: "/forgot-password",

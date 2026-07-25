@@ -7,7 +7,37 @@ import { HiOutlineUserGroup } from "react-icons/hi2";
 import { VscNote } from "react-icons/vsc";
 import { PiMoneyLight } from "react-icons/pi";
 import { AiOutlineHeart } from "react-icons/ai";
+import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
+
 const Dashboard = () => {
+  const { token } = useSelector((state) => state.logInUser);
+  const [stats, setStats] = useState({
+    total_users: 0,
+    active_relationships: 0,
+    total_earning: NaN,
+    active_subscriptions: NaN
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/admin/stats`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats", error);
+      }
+    };
+    if (token) fetchStats();
+  }, [token]);
+
   return (
     <div className=" ">
       <div className="grid grid-cols-4 gap-4">
@@ -16,7 +46,7 @@ const Dashboard = () => {
             <HiOutlineUserGroup className="text-red-500" />
           </div>
           <div>
-            <h1 className="font-semibold text-2xl">1,100</h1>
+            <h1 className="font-semibold text-2xl">{stats.total_users.toLocaleString()}</h1>
             <h1 className="text-zinc-500"> Total User</h1>
           </div>
         </div>
@@ -25,7 +55,7 @@ const Dashboard = () => {
            <AiOutlineHeart className="text-sky-600" />
           </div>
           <div>
-            <h1 className="font-semibold text-2xl">1,100</h1>
+            <h1 className="font-semibold text-2xl">{stats.active_relationships.toLocaleString()}</h1>
             <h1 className="text-zinc-500"> Active Relationships</h1>
           </div>
         </div>
@@ -34,7 +64,7 @@ const Dashboard = () => {
              <PiMoneyLight className="text-green-500" />
           </div>
           <div>
-            <h1 className="font-semibold text-2xl">1,100</h1>
+            <h1 className="font-semibold text-2xl">{Number.isNaN(stats.total_earning) ? "NaN" : stats.total_earning}</h1>
             <h1 className="text-zinc-500"> Total Earning</h1>
           </div>
         </div>
@@ -43,7 +73,7 @@ const Dashboard = () => {
            <VscNote className="text-purple-500" />
           </div>
           <div>
-            <h1 className="font-semibold text-2xl">1,100</h1>
+            <h1 className="font-semibold text-2xl">{Number.isNaN(stats.active_subscriptions) ? "NaN" : stats.active_subscriptions}</h1>
             <h1 className="text-zinc-500"> Active Subscriptions</h1>
           </div>
         </div>

@@ -3,7 +3,8 @@ import profilee from "../../../src/assets/header/profileLogo.png";
 import { Link, useNavigate } from "react-router-dom";
 import { FaBars } from "react-icons/fa";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import { Drawer, Radio, Space } from "antd";
 
 import dashboard from "../../assets/routerImg/dashboard.png";
@@ -103,8 +104,31 @@ const Header = () => {
   const [selectedKey, setSelectedKey] = useState("dashboard");
   const [expandedKeys, setExpandedKeys] = useState([]);
   const navigate = useNavigate();
+  const { token } = useSelector((state) => state.logInUser);
+  const [profile, setProfile] = useState(null);
 
   const contentRef = useRef({});
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setProfile(data);
+        }
+      } catch (error) {
+        console.error("Error fetching profile in Header:", error);
+      }
+    };
+    if (token) {
+      fetchProfile();
+    }
+  }, [token]);
 
   const onParentClick = (key) => {
     setExpandedKeys((prev) =>
@@ -129,6 +153,7 @@ const Header = () => {
   };
   const handleLogout = () => {
     localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
     navigate("/login");
   };
   return (
@@ -268,16 +293,16 @@ const Header = () => {
           </div>
 
           <Link to={"/dashboard/Settings/profile"}>
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
               <div>
                 <img
-                  className="w-[45px] h-[45px]"
-                  src={profilee}
+                  className="w-[45px] h-[45px] rounded-full object-cover"
+                  src={profile?.profile_photo_url || profilee}
                   alt="profile"
                 />
               </div>
               <div className="text-end">
-                <h3>Your Name</h3>
+                <h3>{profile?.name || "Your Name"}</h3>
                 <h4 className="text-sm">Admin</h4>
               </div>
             </div>

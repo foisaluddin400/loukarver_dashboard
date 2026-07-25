@@ -8,13 +8,17 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useSelector } from "react-redux";
 import { Select } from "antd";
 
 const UserGrowthChart = () => {
+  const { token } = useSelector((state) => state.logInUser);
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [years, setYears] = useState([]);
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [maxUsers, setMaxUsers] = useState(0);
 
   useEffect(() => {
     const startYear = 2024;
@@ -25,32 +29,24 @@ const UserGrowthChart = () => {
     setYears(yearsArray);
   }, [currentYear]);
 
-  const { monthlyData, maxUsers } = useMemo(() => {
-    const monthMap = {
-      Jan: 450,
-      Feb: 200,
-      Mar: 800,
-      Apr: 400,
-      May: 230,
-      Jun: 400,
-      Jul: 450,
-      Aug: 500,
-      Sep: 550,
-      Oct: 600,
-      Nov: 650,
-      Dec: 700,
+  useEffect(() => {
+    const fetchGrowth = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/admin/stats/user-growth?year=${year}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMonthlyData(data);
+          const maxVal = Math.max(...data.map(d => d.totalUser), 0);
+          setMaxUsers(maxVal + 4);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user growth", error);
+      }
     };
-
-    const maxUsers = Math.max(...Object.values(monthMap), 0) + 4;
-
-    return {
-      monthlyData: Object.keys(monthMap).map((month) => ({
-        name: month,
-        totalUser: monthMap[month],
-      })),
-      maxUsers,
-    };
-  }, []);
+    if (token) fetchGrowth();
+  }, [year, token]);
 
   return (
     <div
