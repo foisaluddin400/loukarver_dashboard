@@ -1,9 +1,12 @@
 import { createSlice } from '@reduxjs/toolkit';
 
+const getInitialToken = () => {
+  return localStorage.getItem('token') || sessionStorage.getItem('token') || null;
+};
 
 const initialState = {
   user: null,
-  token: null,
+  token: getInitialToken(),
 };
 
 export const authSlice = createSlice({
@@ -11,11 +14,20 @@ export const authSlice = createSlice({
   initialState,
   reducers: {
     setToken: (state, action) => {
-      const  token  = action.payload;
+      const { token, rememberMe } = action.payload;
       state.token = token;
+      if (rememberMe) {
+        localStorage.setItem('token', token);
+        sessionStorage.removeItem('token');
+      } else {
+        sessionStorage.setItem('token', token);
+        localStorage.removeItem('token');
+      }
     },
     logout: (state) => {
       state.token = null;
+      localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
     },
   },
 });

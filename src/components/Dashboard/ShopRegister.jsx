@@ -1,37 +1,38 @@
-import React, { useState } from "react";
-import { Table, Modal } from "antd";
+import React, { useState, useEffect } from "react";
+import { Table, Modal, message } from "antd";
 import { LuEye } from "react-icons/lu";
 import { MdBlockFlipped, MdDelete } from "react-icons/md";
+import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+
+const { confirm } = Modal;
 
 const ShopRegister = () => {
+  const { token } = useSelector((state) => state.logInUser);
+  const navigate = useNavigate();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [users, setUsers] = useState([]);
 
-  // ✅ Demo Data (replace with API later)
-  const paginatedUsers = [
-    {
-      key: 1,
-      name: "John Doe",
-      image: "https://i.pravatar.cc/150?img=1",
-      connectedDate: "2024-01-10",
-      duration: "3 Months",
-      subscription: "Premium",
-      relationship: "Committed",
-      email: "john@example.com",
-    },
-    {
-      key: 2,
-      name: "Sarah Smith",
-      image: "https://i.pravatar.cc/150?img=2",
-      connectedDate: "2024-02-15",
-      duration: "1 Month",
-      subscription: "Free",
-      relationship: "Single",
-      email: "sarah@example.com",
-    },
-  ];
+  const fetchCollaborations = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/admin/recent-collaborations`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch collaborations", error);
+    }
+  };
 
-  // ✅ Modal handlers
+  useEffect(() => {
+    if (token) fetchCollaborations();
+  }, [token]);
+
   const showModal = (record) => {
     setSelectedUser(record);
     setIsModalOpen(true);
@@ -42,16 +43,56 @@ const ShopRegister = () => {
     setSelectedUser(null);
   };
 
-
-  const handleBlock = (user) => {
-    console.log("Block user:", user);
+  const handleStatusUpdate = async (userId, payload, successMessage) => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/admin/users/${userId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (res.ok) {
+        message.success(successMessage);
+        fetchCollaborations(); // Refresh list
+        setIsModalOpen(false); // Close modal if open
+      } else {
+        const err = await res.json();
+        message.error(err.detail || "Failed to update user");
+      }
+    } catch (error) {
+      message.error("An error occurred");
+    }
   };
 
-  const handleDelete = (user) => {
-    console.log("Delete user:", user);
+  const confirmBlock = (user) => {
+    const isBlocked = user.is_blocked;
+    confirm({
+      title: `Are you sure you want to ${isBlocked ? "unblock" : "block"} this user?`,
+      content: `User: ${user.name || user.email}`,
+      okText: "Yes",
+      cancelText: "No",
+      onOk() {
+        handleStatusUpdate(user.id, { is_blocked: !isBlocked }, `User successfully ${isBlocked ? "unblocked" : "blocked"}`);
+      }
+    });
   };
 
-  // ✅ Table Columns
+  const confirmDelete = (user) => {
+    confirm({
+      title: "Are you sure you want to delete this user?",
+      content: `User: ${user.name || user.email}. This action will soft-delete the user.`,
+      okText: "Yes, Delete",
+      okType: "danger",
+      cancelText: "No",
+      onOk() {
+        handleStatusUpdate(user.id, { is_deleted: true }, "User successfully deleted");
+      }
+    });
+  };
+
   const columns = [
     {
       title: "User",
@@ -59,37 +100,43 @@ const ShopRegister = () => {
       render: (_, record) => (
         <div className="flex items-center gap-3">
           <img
-            src={record.image}
+            src={record.profile_photo_url || `https://ui-avatars.com/api/?name=${record.name || record.email}`}
             className="w-10 h-10 object-cover rounded-full border"
             alt=""
           />
-          <span className="font-medium">{record.name}</span>
+          <span className="font-medium">{record.name || "Unknown"}</span>
         </div>
       ),
     },
     {
       title: "Connected Date",
-      dataIndex: "connectedDate",
+      key: "connectedDate",
+      render: (_, record) => {
+        // Since we don't store exactly when partner connected, we fallback to account creation
+        // or a default value, here we can just show join duration we calculated
+        return <span>{record.join_duration} ago</span>;
+      }
     },
     {
       title: "Duration",
-      dataIndex: "duration",
+      dataIndex: "join_duration",
+      key: "duration",
     },
     {
       title: "Subscription",
-      dataIndex: "subscription",
-      render: (text) => (
+      key: "subscription",
+      render: () => (
         <span className="px-2 py-1 bg-blue-100 text-blue-600 rounded-md text-xs">
-          {text}
+          Free
         </span>
       ),
     },
     {
       title: "Relationship",
-      dataIndex: "relationship",
-      render: (text) => (
+      key: "relationship",
+      render: (_, record) => (
         <span className="px-2 py-1 bg-pink-100 text-pink-600 rounded-md text-xs">
-          {text}
+          {record.is_aligned ? "Aligned" : (record.partner ? "Connected" : "Single")}
         </span>
       ),
     },
@@ -103,15 +150,17 @@ const ShopRegister = () => {
           </button>
 
           <button
-            onClick={() => handleBlock(record)}
-            className="bg-red-500 text-white p-1 rounded"
+            onClick={() => confirmBlock(record)}
+            className={`${record.is_blocked ? "bg-orange-500" : "bg-red-500"} text-white p-1 rounded`}
+            title={record.is_blocked ? "Unblock User" : "Block User"}
           >
             <MdBlockFlipped />
           </button>
 
           <button
-            onClick={() => handleDelete(record)}
+            onClick={() => confirmDelete(record)}
             className="bg-gray-800 text-white p-1 rounded"
+            title="Delete User"
           >
             <MdDelete />
           </button>
@@ -123,19 +172,24 @@ const ShopRegister = () => {
   return (
     <div className="">
        <div className="flex mb-3 justify-between">
-        <p className="text-xl  font-semibold text-gray-800">
+        <p className="text-xl font-semibold text-gray-800">
           Recent Collaboration
         </p>
-        <button className="text-[#B7835E]">View All</button>
+        <button 
+          className="text-[#B7835E]"
+          onClick={() => navigate("/dashboard/UserManagement")}
+        >
+          View All
+        </button>
        </div>
       <Table
-        dataSource={paginatedUsers}
+        dataSource={users}
         columns={columns}
         pagination={false}
+        rowKey="id"
         scroll={{ x: "max-content" }}
       />
 
-      {/* ✅ Modal */}
       <Modal
         open={isModalOpen}
         footer={null}
@@ -144,60 +198,57 @@ const ShopRegister = () => {
       >
         {selectedUser && (
           <div className="p-5 text-center">
-            {/* Profile */}
             <div className="flex flex-col items-center">
               <img
-                src={selectedUser.image}
+                src={selectedUser.profile_photo_url || `https://ui-avatars.com/api/?name=${selectedUser.name || selectedUser.email}`}
                 className="w-24 h-24 rounded-full object-cover border-4 border-blue-200 mb-3"
                 alt=""
               />
-              <h2 className="text-xl font-bold">{selectedUser.name}</h2>
+              <h2 className="text-xl font-bold">{selectedUser.name || "Unknown"}</h2>
               <p className="text-gray-500 text-sm">
                 {selectedUser.email}
               </p>
             </div>
 
-            {/* Info */}
             <div className="mt-6 space-y-3 text-left">
               <div className="flex justify-between bg-gray-50 p-3 rounded-lg">
                 <span className="text-gray-500">Connected Date</span>
                 <span className="font-medium">
-                  {selectedUser.connectedDate}
+                  {selectedUser.join_duration} ago
                 </span>
               </div>
 
               <div className="flex justify-between bg-gray-50 p-3 rounded-lg">
                 <span className="text-gray-500">Duration</span>
                 <span className="font-medium">
-                  {selectedUser.duration}
+                  {selectedUser.join_duration}
                 </span>
               </div>
 
               <div className="flex justify-between bg-gray-50 p-3 rounded-lg">
                 <span className="text-gray-500">Subscription</span>
                 <span className="text-blue-600 font-medium">
-                  {selectedUser.subscription}
+                  Free
                 </span>
               </div>
 
               <div className="flex justify-between bg-gray-50 p-3 rounded-lg">
                 <span className="text-gray-500">Relationship</span>
                 <span className="text-pink-600 font-medium">
-                  {selectedUser.relationship}
+                  {selectedUser.is_aligned ? "Aligned" : (selectedUser.partner ? "Connected" : "Single")}
                 </span>
               </div>
             </div>
 
-            {/* Buttons */}
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => handleBlock(selectedUser)}
+                onClick={() => confirmBlock(selectedUser)}
                 className="flex-1 bg-red-500 text-white py-2 rounded-lg"
               >
-                Block
+                {selectedUser.is_blocked ? "Unblock" : "Block"}
               </button>
               <button
-                onClick={() => handleDelete(selectedUser)}
+                onClick={() => confirmDelete(selectedUser)}
                 className="flex-1 bg-gray-800 text-white py-2 rounded-lg"
               >
                 Delete
