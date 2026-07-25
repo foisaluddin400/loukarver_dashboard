@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { message, Modal } from "antd";
 import { FaRegQuestionCircle } from "react-icons/fa";
 import { RiDeleteBin6Line } from "react-icons/ri";
 import { CiEdit } from "react-icons/ci";
+import { useSelector } from "react-redux";
 import { Navigate } from "../../Navigate";
 
 const FAQ = () => {
@@ -14,34 +15,24 @@ const FAQ = () => {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
 
-  // Dummy data
-  const [faqs, setFaqs] = useState([
-    {
-      _id: "1",
-      question: "What is your return policy?",
-      answer: "We offer a 30-day return policy for all products. Items must be returned in their original condition with all tags attached. Please contact our support team to initiate a return request."
-    },
-    {
-      _id: "2", 
-      question: "How long does shipping take?",
-      answer: "Standard shipping takes 3-7 business days within the continental US. Expedited shipping options are available at checkout. International shipping times vary by destination country."
-    },
-    {
-      _id: "3",
-      question: "Do you offer international shipping?",
-      answer: "Yes, we ship to most countries worldwide. Please note that import duties, taxes, and shipping fees may apply. Check our shipping policy page for specific countries and rates."
-    },
-    {
-      _id: "4",
-      question: "What payment methods do you accept?",
-      answer: "We accept all major credit cards (Visa, MasterCard, American Express, Discover), PayPal, Apple Pay, and Google Pay. All transactions are securely processed through our payment gateway."
-    },
-    {
-      _id: "5",
-      question: "How can I track my order?",
-      answer: "Once your order ships, you'll receive a tracking number via email. You can also track your order status in your account dashboard under 'My Orders' section."
+  const { token } = useSelector((state) => state.logInUser);
+  const [faqs, setFaqs] = useState([]);
+
+  useEffect(() => {
+    fetchFaqs();
+  }, []);
+
+  const fetchFaqs = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/faq`);
+      if (res.ok) {
+        const data = await res.json();
+        setFaqs(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch FAQs:", error);
     }
-  ]);
+  };
 
   // Accordion click
   const handleClick = (index) => {
@@ -49,45 +40,86 @@ const FAQ = () => {
   };
 
   // Add FAQ
-  const handleAddFaq = () => {
+  const handleAddFaq = async () => {
     if (!question || !answer) return message.warning("Please fill all fields");
     
-    const newFaq = {
-      _id: Date.now().toString(),
-      question,
-      answer
-    };
-    
-    setFaqs(prev => [...prev, newFaq]);
-    message.success("FAQ added successfully");
-    setAddModalOpen(false);
-    setQuestion("");
-    setAnswer("");
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/faq`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ question, answer })
+      });
+      
+      if (res.ok) {
+        message.success("FAQ added successfully");
+        fetchFaqs();
+        setAddModalOpen(false);
+        setQuestion("");
+        setAnswer("");
+      } else {
+        const err = await res.json();
+        message.error(err.detail || "Failed to add FAQ");
+      }
+    } catch (error) {
+      message.error("An error occurred");
+    }
   };
 
   // Update FAQ
-  const handleUpdateFaq = () => {
+  const handleUpdateFaq = async () => {
     if (!question || !answer) return message.warning("Please fill all fields");
     
-    setFaqs(prev => prev.map(faq => 
-      faq._id === selectedFaq._id 
-        ? { ...faq, question, answer }
-        : faq
-    ));
-    
-    message.success("FAQ updated successfully");
-    setUpdateModalOpen(false);
-    setSelectedFaq(null);
-    setQuestion("");
-    setAnswer("");
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/faq/${selectedFaq.id || selectedFaq._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ question, answer })
+      });
+      
+      if (res.ok) {
+        message.success("FAQ updated successfully");
+        fetchFaqs();
+        setUpdateModalOpen(false);
+        setSelectedFaq(null);
+        setQuestion("");
+        setAnswer("");
+      } else {
+        const err = await res.json();
+        message.error(err.detail || "Failed to update FAQ");
+      }
+    } catch (error) {
+      message.error("An error occurred");
+    }
   };
 
   // Delete FAQ
-  const handleDeleteFaq = () => {
-    setFaqs(prev => prev.filter(faq => faq._id !== selectedFaq._id));
-    message.success("FAQ deleted successfully");
-    setDeleteModalOpen(false);
-    setSelectedFaq(null);
+  const handleDeleteFaq = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/faq/${selectedFaq.id || selectedFaq._id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (res.ok) {
+        message.success("FAQ deleted successfully");
+        fetchFaqs();
+        setDeleteModalOpen(false);
+        setSelectedFaq(null);
+      } else {
+        const err = await res.json();
+        message.error(err.detail || "Failed to delete FAQ");
+      }
+    } catch (error) {
+      message.error("An error occurred");
+    }
   };
 
   return (

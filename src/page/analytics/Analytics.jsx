@@ -11,11 +11,16 @@ import {
 } from "recharts";
 import { Select } from "antd";
 import { Navigate } from "../../Navigate";
-//yyy
+import { useSelector } from "react-redux";
+
 const Analytics = () => {
   const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState("2025");
+  const [year, setYear] = useState(String(currentYear));
   const [years, setYears] = useState([]);
+  const [feature, setFeature] = useState("CheckIn");
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [maxUsers, setMaxUsers] = useState(0);
+  const { token } = useSelector((state) => state.logInUser);
 
   useEffect(() => {
     const startYear = 2024;
@@ -26,35 +31,27 @@ const Analytics = () => {
     setYears(yearsArray);
   }, [currentYear]);
 
-  const { monthlyData, maxUsers } = useMemo(() => {
-    const monthMap = {
-      Jan: { men: 450, women: 100 },
-      Feb: { men: 400, women: 650 },
-      Mar: { men: 800, women: 500 },
-      Apr: { men: 400, women: 350 },
-      May: { men: 530, women: 380 },
-      Jun: { men: 400, women: 620 },
-      Jul: { men: 450, women: 380 },
-      Aug: { men: 500, women: 420 },
-      Sep: { men: 550, women: 470 },
-      Oct: { men: 300, women: 900 },
-      Nov: { men: 650, women: 530 },
-      Dec: { men: 200, women: 600 },
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/admin/analytics?year=${year}&feature=${feature}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMonthlyData(data);
+          
+          // Calculate max users to dynamically set Y-axis height
+          const maxVal = Math.max(...data.flatMap(d => [d.Men, d.Women]), 0);
+          setMaxUsers(maxVal);
+        }
+      } catch (error) {
+        console.error("Failed to fetch analytics", error);
+      }
     };
-
-    const maxUsers = Math.max(
-      ...Object.values(monthMap).flatMap((v) => [v.men, v.women])
-    );
-
-    return {
-      monthlyData: Object.keys(monthMap).map((month) => ({
-        name: month,
-        Men: monthMap[month].men,
-        Women: monthMap[month].women,
-      })),
-      maxUsers,
-    };
-  }, []);
+    
+    if (token) fetchAnalytics();
+  }, [year, feature, token]);
 
   return (
     <div className="bg-white p-3 h-[87vh] overflow-auto">
@@ -62,7 +59,8 @@ const Analytics = () => {
          <Navigate title={"Analytics"} />
         <div className="flex gap-4">
           <Select
-            placeholder="Select Feature"
+            value={feature}
+            onChange={(val) => setFeature(val)}
             options={[
               { value: "CheckIn", label: "Check In" },
               { value: "DatePlanning", label: "Date Planning" },

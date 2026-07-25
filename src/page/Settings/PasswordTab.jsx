@@ -1,42 +1,55 @@
 import { Button, Form, Input, message } from "antd";
 import React, { useState } from "react";
-
+import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
-
 export const PasswordTab = () => {
-//   const [changePassword] = useChangePasswordMutation();
-
   const [passError, setPassError] = useState("");
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const { token } = useSelector((state) => state.logInUser);
+  const [form] = Form.useForm();
 
   const handlePasswordChange = async (values) => {
-    // if (values?.newPassword === values.oldPassword) {
-    //   return setPassError("Your old password cannot be your new password.");
-    // }
-    // if (values?.newPassword !== values?.confirmPassword) {
-    //   return setPassError("Confirm password doesn't match.");
-    // } else {
-    //   setPassError("");
-    // }
+    if (values?.newPassword === values.currentPassword) {
+      return setPassError("Your old password cannot be your new password.");
+    }
+    if (values?.newPassword !== values?.confirmPassword) {
+      return setPassError("Confirm password doesn't match.");
+    } else {
+      setPassError("");
+    }
 
-    // const data = {
-    //   current_password: values.currentPassword,
-    //   new_password: values.newPassword,
-    // };
-    // try {
-    //   const response = await changePassword(data).unwrap();
-    //   message.success(response.message);
-    //   console.log(response);
-    // } catch (error) {
-    //   console.log(error);
-    //   message.error(error.data.message);
-    // }
+    setLoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          old_password: values.currentPassword,
+          new_password: values.newPassword
+        })
+      });
+      const data = await response.json();
+      
+      if (response.ok) {
+        message.success("Password changed successfully!");
+        form.resetFields();
+      } else {
+        setPassError(data.detail || "Failed to change password.");
+      }
+    } catch (error) {
+      message.error("Something went wrong");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div>
-      <Form layout="vertical" onFinish={handlePasswordChange}>
+      <Form form={form} layout="vertical" onFinish={handlePasswordChange}>
         <h2 className="text-xl font-semibold mb-4 text-center">
           Change Your Password
         </h2>
@@ -83,8 +96,8 @@ export const PasswordTab = () => {
 
         <Form.Item>
           <div className="flex justify-center">
-          <button type="submit" className="w-full bg-[#8B4513] text-white py-2">
-                Change Password
+          <button type="submit" disabled={loading} className={`w-full bg-[#8B4513] text-white py-2 ${loading ? "opacity-70" : ""}`}>
+                {loading ? "Changing..." : "Change Password"}
               </button>
           </div>
         </Form.Item>
