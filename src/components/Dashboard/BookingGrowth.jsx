@@ -1,5 +1,6 @@
 import { Select } from "antd";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -10,53 +11,27 @@ import {
   Tooltip,
 } from "recharts";
 
-const data = {
-  2024: [
-    { month: "Jan", value: 100 },
-    { month: "Feb", value: 90 },
-    { month: "Mar", value: 300 },
-    { month: "Apr", value: 250 },
-    { month: "May", value: 300 },
-    { month: "Jun", value: 20 },
-    { month: "Jul", value: 400 },
-    { month: "Aug", value: 250 },
-    { month: "Sep", value: 700 },
-    { month: "Oct", value: 50 },
-    { month: "Nov", value: 600 },
-    { month: "Dec", value: 155 },
-  ],
-  2023: [
-    { month: "Jan", value: 100 },
-    { month: "Feb", value: 90 },
-    { month: "Mar", value: 300 },
-    { month: "Apr", value: 250 },
-    { month: "May", value: 300 },
-    { month: "Jun", value: 20 },
-    { month: "Jul", value: 400 },
-    { month: "Aug", value: 250 },
-    { month: "Sep", value: 700 },
-    { month: "Oct", value: 50 },
-    { month: "Nov", value: 600 },
-    { month: "Dec", value: 155 },
-  ],
-  2022: [
-    { month: "Jan", value: 80 },
-    { month: "Feb", value: 130 },
-    { month: "Mar", value: 180 },
-    { month: "Apr", value: 230 },
-    { month: "May", value: 280 },
-    { month: "Jun", value: 330 },
-    { month: "Jul", value: 380 },
-    { month: "Aug", value: 430 },
-    { month: "Sep", value: 480 },
-    { month: "Oct", value: 530 },
-    { month: "Nov", value: 580 },
-    { month: "Dec", value: 630 },
-  ],
-};
-
 const BookingGrowth = () => {
+  const { token } = useSelector((state) => state.logInUser);
   const [year, setYear] = useState("2024");
+  const [chartData, setChartData] = useState([]);
+
+  useEffect(() => {
+    const fetchEarnings = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/admin/stats/earnings?year=${year}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setChartData(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch earnings", error);
+      }
+    };
+    if (token) fetchEarnings();
+  }, [year, token]);
 
   const handleYearChange = (value) => {
     setYear(value);
@@ -88,7 +63,7 @@ const BookingGrowth = () => {
       <div className="h-96">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
-            data={data[year]}
+            data={chartData}
             margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
           >
             <defs>

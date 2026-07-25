@@ -1,32 +1,46 @@
-import React, { useState } from "react";
-import { Input, Modal, Pagination, Select, Table, message } from "antd";
+import React, { useState, useEffect } from "react";
+import { Input, Modal, Pagination, Select, Table, message, Dropdown, Menu } from "antd";
 import { MdBlockFlipped } from "react-icons/md";
-import { SearchOutlined } from "@ant-design/icons";
-import { LuEye } from "react-icons/lu";
+import { SearchOutlined, MoreOutlined } from "@ant-design/icons";
+import { LuEye, LuEyeOff } from "react-icons/lu";
+import { RiDeleteBin6Line } from "react-icons/ri";
+import { useSelector } from "react-redux";
 import { Navigate } from "../../Navigate";
 
+const { confirm } = Modal;
+
 const UserManagement = () => {
+  const { token } = useSelector((state) => state.logInUser);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
-
-  // ✅ FIXED DATA
-  const [users, setUsers] = useState(
-    Array.from({ length: 8 }, (_, index) => ({
-      key: index + 1,
-      name: `User ${index + 1}`,
-      email: `user${index + 1}@example.com`,
-      phone: `+8801${Math.floor(100000000 + Math.random() * 900000000)}`,
-      image: `https://i.pravatar.cc/150?img=${index + 1}`,
-
-      partnerConnection: `${Math.floor(Math.random() * 5) + 1} Partners`,
-      subscription: index % 2 === 0 ? "Premium" : "Free",
-      status: index % 2 === 0 ? "Active" : "Blocked",
-    })),
-  );
+  
+  const [users, setUsers] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Modal state
   const [isModalOpen2, setIsModalOpen2] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [statusFilter]);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/admin/users?status_filter=${statusFilter}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch users", error);
+    }
+  };
 
   const showModal2 = (record) => {
     setSelectedUser(record);
@@ -38,19 +52,58 @@ const UserManagement = () => {
     setSelectedUser(null);
   };
 
-  // ✅ REAL Block / Unblock toggle
-  const handleBlockUnblock = (id) => {
-    const updated = users.map((user) =>
-      user.key === id
-        ? {
-            ...user,
-            status: user.status === "Active" ? "Blocked" : "Active",
-          }
-        : user,
-    );
+  const handleStatusUpdate = async (userId, payload, successMessage) => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/admin/users/${userId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (res.ok) {
+        message.success(successMessage);
+        fetchUsers(); // Refresh list
+      } else {
+        const err = await res.json();
+        message.error(err.detail || "Failed to update user");
+      }
+    } catch (error) {
+      message.error("An error occurred");
+    }
+  };
 
-    setUsers(updated);
-    message.success("Status updated successfully");
+  const confirmBlock = (user) => {
+    const isBlocked = user.is_blocked;
+    confirm({
+      title: `Are you sure you want to ${isBlocked ? "unblock" : "block"} this user?`,
+      content: `User: ${user.name || user.email}`,
+      okText: "Yes",
+      cancelText: "No",
+      onOk() {
+        handleStatusUpdate(user.id, { is_blocked: !isBlocked }, `User successfully ${isBlocked ? "unblocked" : "blocked"}`);
+      }
+    });
+  };
+
+  const confirmDelete = (user) => {
+    confirm({
+      title: "Are you sure you want to delete this user?",
+      content: `User: ${user.name || user.email}. This action will soft-delete the user.`,
+      okText: "Yes, Delete",
+      okType: "danger",
+      cancelText: "No",
+      onOk() {
+        handleStatusUpdate(user.id, { is_deleted: true }, "User successfully deleted");
+      }
+    });
+  };
+
+  const toggleHide = (user) => {
+    const isHidden = user.is_hidden;
+    handleStatusUpdate(user.id, { is_hidden: !isHidden }, `User successfully ${isHidden ? "unhidden" : "hidden"}`);
   };
 
   // ✅ Columns
@@ -61,12 +114,12 @@ const UserManagement = () => {
       render: (_, record) => (
         <div className="flex items-center gap-3">
           <img
-            src={record.image}
+            src={record.profile_photo_url || `https://ui-avatars.com/api/?name=${record.name || record.email}`}
             className="w-10 h-10 object-cover rounded-full"
             alt=""
           />
           <div>
-            <p className="font-medium">{record.name}</p>
+            <p className="font-medium">{record.name || "Unknown"}</p>
             <p className="text-xs text-gray-500">{record.email}</p>
           </div>
         </div>
@@ -74,63 +127,79 @@ const UserManagement = () => {
     },
     {
       title: "Partner Connection",
-      dataIndex: "partnerConnection",
+      key: "partnerConnection",
+      render: (_, record) => (
+        <span>{record.partner ? "Connected" : "None"}</span>
+      )
     },
     {
-      title: "Subscription",
-      dataIndex: "subscription",
-      render: (text) => (
+      title: "Aligned",
+      key: "subscription",
+      render: (_, record) => (
         <span className="px-2 py-1 bg-blue-100 text-blue-600 rounded text-xs">
-          {text}
+          {record.is_aligned ? "Aligned" : "Not Aligned"}
         </span>
       ),
     },
     {
       title: "Status",
-      dataIndex: "status",
-      render: (text) => (
-        <span
-          className={`px-2 py-1 rounded text-xs ${
-            text === "Active"
-              ? "bg-green-100 text-green-600"
-              : "bg-red-100 text-red-600"
-          }`}
-        >
-          {text}
-        </span>
-      ),
+      key: "status",
+      render: (_, record) => {
+        if (record.is_deleted) return <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-600">Deleted</span>;
+        if (record.is_blocked) return <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-600">Blocked</span>;
+        if (record.is_hidden) return <span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600">Hidden</span>;
+        return <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-600">Active</span>;
+      },
     },
     {
       title: "Actions",
       key: "action",
-      render: (_, record) => (
-        <div className="flex gap-2 items-center">
-          <button onClick={() => showModal2(record)}>
-            <LuEye className="text-xl text-blue-600" />
-          </button>
+      render: (_, record) => {
+        const menu = (
+          <Menu>
+            <Menu.Item key="1" onClick={() => showModal2(record)} icon={<LuEye />}>
+              View Details
+            </Menu.Item>
+            {!record.is_deleted && (
+              <>
+                <Menu.Item key="2" onClick={() => confirmBlock(record)} icon={<MdBlockFlipped />}>
+                  {record.is_blocked ? "Unblock" : "Block"}
+                </Menu.Item>
+                <Menu.Item key="3" onClick={() => toggleHide(record)} icon={record.is_hidden ? <LuEye /> : <LuEyeOff />}>
+                  {record.is_hidden ? "Unhide" : "Hide"}
+                </Menu.Item>
+                <Menu.Item key="4" danger onClick={() => confirmDelete(record)} icon={<RiDeleteBin6Line />}>
+                  Delete
+                </Menu.Item>
+              </>
+            )}
+          </Menu>
+        );
 
-          <button
-            onClick={() => handleBlockUnblock(record.key)}
-            className={`w-[30px] h-[30px] flex justify-center items-center text-xl rounded-md ${
-              record.status === "Active" ? "bg-red-500" : "bg-green-600"
-            } text-white`}
-          >
-            <MdBlockFlipped />
-          </button>
-        </div>
-      ),
+        return (
+          <Dropdown overlay={menu} trigger={['click']}>
+            <button className="text-xl px-3 py-1 bg-gray-100 rounded-md hover:bg-gray-200">
+              <MoreOutlined />
+            </button>
+          </Dropdown>
+        );
+      },
     },
   ];
 
-  // Pagination
+  // Pagination & Search
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
 
-  // Paginated Data
+  const filteredUsers = users.filter(user => 
+    (user.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+    (user.email?.toLowerCase() || "").includes(searchQuery.toLowerCase())
+  );
+
   const start = (currentPage - 1) * pageSize;
   const end = start + pageSize;
-  const paginatedUsers = users.slice(start, end);
+  const paginatedUsers = filteredUsers.slice(start, end);
 
   return (
     <div className="bg-white p-3 h-[87vh] overflow-auto">
@@ -139,34 +208,27 @@ const UserManagement = () => {
 
         <div className="flex gap-4">
           <Select
-            placeholder="Sort by Status"
+            value={statusFilter}
+            onChange={(val) => {
+              setStatusFilter(val);
+              setCurrentPage(1);
+            }}
             options={[
-              { value: "Active", label: "Active" },
-              { value: "Blocked", label: "Blocked" },
+              { value: "All", label: "All Active" },
+              { value: "Blocked", label: "Blocked Users" },
+              { value: "Hidden", label: "Hidden Users" },
+              { value: "Deleted", label: "Deleted Users" },
             ]}
-            style={{ maxWidth: "300px", height: "40px" }}
-          />
-
-          <Select
-            placeholder="Subscription"
-            options={[
-              { value: "Free", label: "Free" },
-              { value: "Individual Plan", label: "Individual Plan" },
-              { value: "Individual Plan", label: "Couple" },
-            ]}
-            style={{ maxWidth: "300px", height: "40px" }}
+            style={{ maxWidth: "300px", minWidth: "150px", height: "40px" }}
           />
 
           <Input
-            placeholder="Search by name..."
+            placeholder="Search by name or email..."
             prefix={<SearchOutlined />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             style={{ maxWidth: "300px", height: "40px" }}
           />
-          <div>
-            <button className="bg-[#C09B7A80] py-2 text-[#8B4513] px-5 rounded">
-              Export
-            </button>
-          </div>
         </div>
       </div>
 
@@ -175,13 +237,14 @@ const UserManagement = () => {
         columns={columns}
         pagination={false}
         scroll={{ x: "max-content" }}
+        rowKey="id"
       />
 
       <div className="mt-4 flex justify-center">
         <Pagination
           current={currentPage}
           pageSize={pageSize}
-          total={users.length}
+          total={filteredUsers.length}
           onChange={handlePageChange}
         />
       </div>
@@ -197,42 +260,36 @@ const UserManagement = () => {
           <div className="p-5">
             <div className="flex flex-col items-center">
               <img
-                src={selectedUser.image}
+                src={selectedUser.profile_photo_url || `https://ui-avatars.com/api/?name=${selectedUser.name || selectedUser.email}`}
                 className="w-24 h-24 rounded-full object-cover border-4 border-blue-200 mb-3"
                 alt=""
               />
-              <h2 className="text-xl font-bold">{selectedUser.name}</h2>
+              <h2 className="text-xl font-bold">{selectedUser.name || "Unknown"}</h2>
               <p className="text-gray-500 text-sm">{selectedUser.email}</p>
             </div>
 
             <div className="mt-6 space-y-3">
               <div className="flex justify-between bg-gray-50 p-3 rounded-lg">
-                <span>Phone</span>
-                <span>{selectedUser.phone}</span>
+                <span>Location</span>
+                <span>{selectedUser.location_city || "Unknown"}</span>
               </div>
 
               <div className="flex justify-between bg-gray-50 p-3 rounded-lg">
-                <span>Partner</span>
-                <span>{selectedUser.partnerConnection}</span>
+                <span>Partner Connection</span>
+                <span>{selectedUser.partner ? "Connected" : "None"}</span>
               </div>
 
               <div className="flex justify-between bg-gray-50 p-3 rounded-lg">
-                <span>Subscription</span>
+                <span>Aligned Status</span>
                 <span className="text-blue-600">
-                  {selectedUser.subscription}
+                  {selectedUser.is_aligned ? "Aligned" : "Not Aligned"}
                 </span>
               </div>
 
               <div className="flex justify-between bg-gray-50 p-3 rounded-lg">
                 <span>Status</span>
-                <span
-                  className={
-                    selectedUser.status === "Active"
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }
-                >
-                  {selectedUser.status}
+                <span className={selectedUser.is_deleted ? "text-red-600" : selectedUser.is_blocked ? "text-red-600" : "text-green-600"}>
+                  {selectedUser.is_deleted ? "Deleted" : selectedUser.is_blocked ? "Blocked" : selectedUser.is_hidden ? "Hidden" : "Active"}
                 </span>
               </div>
             </div>
